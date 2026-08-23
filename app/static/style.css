@@ -1,0 +1,615 @@
+/* ============================================
+   Script Runner — Cafe Paper Menu Theme
+   アースカラー・紙メニュー風デザイン
+   ============================================ */
+
+:root {
+    /* ペーパー背景用カラーパレット（アース tones） */
+    --paper: #f5f0e1;            /* 薄めのベージュ（メイン背景） */
+    --menu-bg: #faf6eb;           /* メニューカードの紙色 */
+    --editor-bg: #fffdf8;          /* 編集エリアの背景 */
+    --ink: #3b2f1e;               /* インク色（黒インクの温かみ） */
+    --ink-light: #6b5d4a;         /* 薄いインク（サブテキスト） */
+    --accent: #8b7355;            /* アースブラウン（アコーディメント） */
+    --khaki: #c2b280;             /* カーキ（罫線・アクセント） */
+    --khaki-light: #d9cfb7;       /* 薄いカーキ（境界線） */
+    --btn-run: #5a6f43;           /* レタスグリーン（Runボタン） */
+    --btn-edit: #8b6f47;          /* ブラウン（Editボタン） */
+    --online: #5a6f43;            /* オンライン用 */
+    --offline: #a0522d;           /* オフライン用のテラコッタ */
+    --shadow-soft: 0 2px 12px rgba(80, 60, 30, 0.12);
+    --shadow-card: 0 4px 20px rgba(80, 60, 30, 0.15), 0 1px 4px rgba(80, 60, 30, 0.08);
+
+    /* デザイン定数 */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+}
+
+/* ---------- ダークモード ---------- */
+html[data-theme="dark"] {
+    --paper: #1a1a2e;
+    --menu-bg: #16213e;
+    --editor-bg: #10182c;
+    --ink: #e0e0e0;
+    --ink-light: #aaaaaa;
+    --accent: #8b7355;
+    --khaki: #c2b280;
+    --khaki-light: #444466;
+    --btn-run: #5a6f43;
+    --btn-edit: #8b6f47;
+    --online: #5a6f43;
+    --offline: #c2704e;
+    --shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.4);
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* html[data-theme="dark"] body → specificicy 0-1-2 で base の body (0-1-0) を常に優先 */
+html[data-theme="dark"] body {
+    background-color: var(--paper);
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
+        linear-gradient(175deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    background-blend-mode: normal, normal;
+}
+
+html[data-theme="dark"] .container {
+    background: var(--menu-bg);
+    border-color: var(--khaki-light);
+}
+
+html[data-theme="dark"] .script-item {
+    background: #1e2a45;
+    border-color: var(--khaki-light);
+}
+
+/* ---------- ベース ---------- */
+body {
+    font-family: 'Nunito', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
+    background-color: var(--paper);
+    /* ノイズ感のある紙テクスチャ（CSS 単体で生成） */
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+        linear-gradient(175deg, #f7f2e4 0%, #efe8d2 50%, #ebe3cc 100%);
+    background-blend-mode: normal, normal;
+    color: var(--ink);
+    margin: 0;
+    padding: 24px 16px;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+h1 {
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    margin-bottom: 14px;
+}
+
+/* ---------- 固定ヘッダー ---------- */
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    width: 100%;
+    max-width: 1760px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 20px 0 12px;
+    /* body と同じ紙テクスチャ＋グラデーションで、スクロール中の継ぎ目をなくす */
+    background-color: var(--paper);
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+        linear-gradient(175deg, #f7f2e4 0%, #efe8d2 50%, #ebe3cc 100%);
+    background-attachment: local;
+    box-shadow: 0 6px 14px -8px rgba(80, 60, 30, 0.25);
+}
+
+html[data-theme="dark"] .app-header {
+    background-color: var(--paper);
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
+        linear-gradient(175deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* ヘッダー内のコントロールバー（固定ヘッダー内では下余白を小さく） */
+.app-header .controls {
+    margin-bottom: 0;
+}
+
+/* ヘッダー右端の常設メッセージスロット
+   position: absolute は position: sticky の .app-header が作成する
+   積層コンテキスト内では、スクロール時にヘッダーと一体となって
+   一緒に動いてしまうため、position: fixed を使う（= 常に画面右上） */
+#startup-message {
+    position: fixed;
+    top: 20px;
+    right: 16px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    display: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+    z-index: 200;
+    /* 想定するメッセージ長（約24文字）を収める幅。長文は ellipsis で切り詰め */
+    max-width: min(45vw, 320px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------- コンテナ（メニュー板風） ---------- */
+.container {
+    width: 100%;
+    max-width: 1760px;
+    margin-left: auto;
+    margin-right: auto;
+    background: var(--menu-bg);
+    padding: 32px 28px 28px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--khaki-light);
+    position: relative;
+    overflow: hidden;
+}
+
+/* メニューカードの縁取り装飾（上側の細線） */
+.container::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 16px;
+    right: 16px;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--khaki) 20%, var(--khaki) 80%, transparent);
+    border-radius: 2px;
+}
+
+/* ---------- コントロールバー ---------- */
+.controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.controls label {
+    font-size: 0.85rem;
+    color: var(--ink-light);
+    margin-right: 6px;
+}
+
+.primary-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.list-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sort-select {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--khaki-light);
+    background-color: var(--editor-bg);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b5d4a' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+}
+
+html[data-theme="dark"] .sort-select {
+    color-scheme: dark;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23e0e0e0' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+}
+
+/* ---------- ボタン共通 ---------- */
+button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+button:hover {
+    opacity: 0.88;
+    transform: translateY(-1px);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    filter: grayscale(0.6);
+    pointer-events: none;
+}
+
+/* 新規作成ボタン */
+.btn-create {
+    background: linear-gradient(135deg, var(--btn-run), #4e6340);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(90, 111, 67, 0.3);
+}
+
+/* テーマ切替ボタン */
+.btn-theme {
+    background: linear-gradient(135deg, var(--accent), #7a6448);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(120, 90, 50, 0.25);
+}
+
+/* Run ボタン（レタスグリーン） */
+.btn-run {
+    background: linear-gradient(135deg, var(--btn-run), #4e6340);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(90, 111, 67, 0.3);
+}
+
+/* Edit ボタン（ブラウン） */
+.btn-edit {
+    background: linear-gradient(135deg, var(--btn-edit), #7b6040);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(139, 111, 71, 0.3);
+}
+
+/* Delete ボタン（テラコッタ） */
+.btn-delete {
+    background: linear-gradient(135deg, var(--offline), #8b4226);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(160, 82, 45, 0.3);
+}
+
+/* ---------- スクリプトリスト ---------- */
+.script-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* メニュー項目風カード */
+.script-item {
+    display: flex;
+    align-items: center;
+    background: #fffdf8;
+    border: 1px solid var(--khaki-light);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    min-width: 0;
+    box-shadow: var(--shadow-soft);
+    transition: box-shadow 0.2s, transform 0.15s;
+    position: relative;
+}
+
+.script-item:hover {
+    box-shadow: 0 4px 16px rgba(80, 60, 30, 0.18);
+    transform: translateY(-1px);
+}
+
+/* 左上の斜めアクセントライン（スクリプト名と重ならないよう） */
+.script-item::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 20px;
+    width: 24px;
+    height: 3px;
+    background: linear-gradient(135deg, var(--khaki), transparent);
+    border-radius: 2px;
+    transform: rotate(-45deg);
+}
+
+.info-actions-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 16px;
+}
+
+.script-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.script-name {
+    font-weight: 800;
+    font-size: 1rem;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.script-host {
+    font-size: 0.78rem;
+    color: var(--ink-light);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.script-metadata {
+    font-size: 0.74rem;
+    line-height: 1.35;
+    color: var(--ink-light);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 右側のアクションエリア */
+.actions-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.action-control {
+    display: inline-flex;
+    position: relative;
+}
+
+.action-control button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.action-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* ---------- 状態バッジ（丸みのあるピル型） ---------- */
+.status-badge {
+    font-size: 0.72rem;
+    padding: 4px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    font-weight: 700;
+}
+
+.status-badge.online {
+    background-color: rgba(90, 111, 67, 0.15);
+    color: var(--online);
+}
+
+.status-badge.offline {
+    background-color: rgba(160, 82, 45, 0.12);
+    color: var(--offline);
+}
+
+/* ---------- メッセージタイプ（ヘッダー右端スロット #startup-message 用） ---------- */
+#startup-message.success { background-color: rgba(90, 111, 67, 0.12); color: var(--online); }
+#startup-message.error   { background-color: rgba(160, 82, 45, 0.10);  color: var(--offline); }
+
+/* ---------- モーダル（紙風） ---------- */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(59, 47, 30, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background: var(--menu-bg);
+    margin: 8vh auto;
+    padding: 28px 24px;
+    width: 90%;
+    max-width: 720px;
+    border-radius: var(--radius-lg);
+    color: var(--ink);
+    box-shadow: var(--shadow-card);
+    border: 1.5px solid var(--khaki-light);
+    position: relative;
+}
+
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 8px; left: 20px; right: 20px;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--khaki) 20%, var(--khaki) 80%, transparent);
+    border-radius: 2px;
+}
+
+.modal-content h2 {
+    font-size: 1.2rem;
+    margin-bottom: 16px;
+    font-weight: 800;
+}
+
+#editor-content {
+    width: 100%;
+    height: 400px;
+    font-family: 'Noto Sans Mono', 'Source Code Pro', 'Consolas', monospace;
+    margin-top: 12px;
+    padding: 14px;
+    box-sizing: border-box;
+    background: var(--editor-bg);
+    color: var(--ink);
+    border: 1.5px solid var(--khaki-light);
+    border-radius: var(--radius-sm);
+    resize: vertical;
+}
+
+.filename-group {
+    margin-bottom: 4px;
+}
+
+.filename-group[hidden] {
+    display: none;
+}
+
+.filename-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--ink-light);
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+#filename-input {
+    width: 100%;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border: 1.5px solid var(--khaki-light);
+    border-radius: var(--radius-sm);
+    background: var(--editor-bg);
+    color: var(--ink);
+    font-family: 'Noto Sans Mono', 'Source Code Pro', 'Consolas', monospace;
+}
+
+.editor-error {
+    min-height: 1.2em;
+    margin: 6px 0 0;
+    color: var(--offline);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.modal-actions {
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-save {
+    background: linear-gradient(135deg, var(--btn-run), #4e6340);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(90, 111, 67, 0.3);
+}
+
+.btn-close {
+    background: linear-gradient(135deg, var(--btn-edit), #7b6040);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(139, 111, 71, 0.3);
+}
+
+/* ---------- 確認ダイアログ（小さめモーダル） ---------- */
+.modal-sm {
+    width: 90%;
+    max-width: 420px;
+    margin: 16vh auto;
+}
+
+.delete-warning {
+    color: var(--offline);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.btn-delete-confirm {
+    background: linear-gradient(135deg, var(--offline), #8b4226);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(160, 82, 45, 0.3);
+}
+
+/* ---------- レスポンシブ ---------- */
+@media (min-width: 1050px) {
+    .script-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .script-item { min-height: 146px; }
+    .info-actions-wrapper { flex-direction: column; align-items: stretch; gap: 12px; }
+    .actions-area { width: 100%; justify-content: flex-end; }
+}
+
+@media (min-width: 1550px) {
+    .script-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .script-item { min-height: 142px; padding: 14px 16px; }
+    .actions-area { gap: 8px; }
+    .action-control button { width: 36px; height: 34px; padding: 0; }
+    .action-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+    .action-control::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        z-index: 20;
+        padding: 5px 9px;
+        border-radius: var(--radius-sm);
+        background: var(--ink);
+        color: var(--menu-bg);
+        box-shadow: var(--shadow-soft);
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, 4px);
+        transition: opacity 0.15s, transform 0.15s;
+    }
+    .action-control:hover::after,
+    .action-control:focus::after,
+    .action-control:focus-within::after {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@media (max-width: 600px) {
+    body { padding: 12px; }
+    .container { padding: 20px 16px 18px; }
+    .app-header { padding: 14px 12px 10px; }
+    .app-header .controls { align-items: stretch; }
+    .primary-controls { width: 100%; }
+    .primary-controls button { flex: 1; padding-left: 10px; padding-right: 10px; }
+    #startup-message {
+        position: fixed;
+        top: 14px;
+        right: 12px;
+        max-width: 100%;
+    }
+    .script-item { padding: 12px 14px; flex-direction: column; align-items: flex-start; gap: 10px; }
+    .info-actions-wrapper { flex-direction: column; gap: 10px; }
+    .actions-area { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+}

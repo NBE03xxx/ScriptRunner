@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script Runner — Cafe Menu</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+
+    <!-- 丸みのあるフォント（Nunito） -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/style.css?v=13">
+    <script src="/static/app.js?v=12" defer></script>
+</head>
+<body>
+
+    <!-- ヘッダー（スクロールしても固定表示） -->
+    <header class="app-header">
+        <h1>☕ Script Runner</h1>
+        <div id="startup-message"></div>
+        <div class="controls">
+            <div class="primary-controls">
+                <button class="btn-create" id="create-btn">＋ 新規作成</button>
+                <button class="btn-theme" id="theme-btn">🌓 テーマ切替</button>
+            </div>
+            <div class="list-controls">
+                <label for="tag-filter">Tag:</label>
+                <select id="tag-filter" class="sort-select">
+                    <option value="">すべて</option>
+                </select>
+                <label for="sort-select">並べ替え:</label>
+                <select id="sort-select" class="sort-select">
+                    <option value="name_asc">名前（A→Z）</option>
+                    <option value="name_desc">名前（Z→A）</option>
+                    <option value="mtime_desc">新しい順</option>
+                    <option value="mtime_asc">古い順</option>
+                    <option value="group_asc">Group（昇順）</option>
+                    <option value="group_desc">Group（降順）</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <ul id="script-list" class="script-list"></ul>
+    </div>
+
+    <!-- 削除確認モーダル -->
+    <div id="delete-modal" class="modal">
+        <div class="modal-content modal-sm">
+            <h2>スクリプトの削除</h2>
+            <p id="delete-target-name"></p>
+            <p class="delete-warning">この操作は取り消せません。</p>
+            <div class="modal-actions">
+                <button class="btn-delete-confirm" id="delete-confirm-btn">削除する</button>
+                <button class="btn-close" id="delete-cancel-btn">やめる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- エディタモーダル -->
+    <div id="editor-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="editor-title">編集</h2>
+            <div id="filename-group" class="filename-group" hidden>
+                <label for="filename-input">ファイル名</label>
+                <input type="text" id="filename-input" placeholder="example.sh" autocomplete="off" spellcheck="false">
+                <p id="editor-error" class="editor-error" role="alert"></p>
+            </div>
+            <textarea id="editor-content"></textarea>
+            <div class="modal-actions">
+                <button class="btn-save" id="save-btn">保存</button>
+                <button class="btn-close" id="close-editor-btn">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- トークン入力モーダル -->
+    <div id="token-modal" class="modal">
+        <div class="modal-content modal-sm">
+            <h2>🔑 認証トークンの入力</h2>
+            <p style="font-size:0.85rem;color:var(--ink-light);margin-bottom:16px;">インストール時に設定した認証トークンを入力してください。</p>
+            <input type="password" id="token-input" placeholder="トークンを入力..."
+                   style="width:100%;padding:10px 14px;font-size:0.95rem;border:1.5px solid var(--khaki-light);
+                          border-radius:var(--radius-sm);background:#fffdf8;color:var(--ink);
+                          font-family:inherit;box-sizing:border-box;margin-bottom:16px;">
+            <div id="token-error" style="color:var(--offline);font-size:0.82rem;font-weight:700;display:none;margin-bottom:10px;"></div>
+            <div class="modal-actions">
+                <button class="btn-save" id="token-submit-btn">接続</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
