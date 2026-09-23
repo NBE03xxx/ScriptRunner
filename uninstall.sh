@@ -30,6 +30,8 @@ fi
 SERVICE_NAME="script-runner"
 INSTALL_DIR="${HOME}/ScriptRunner"
 BACKUP_DIR="${HOME}/ScriptRunner-backup"
+DESKTOP_FILE="$HOME/.local/share/applications/com.nbe03xxx.ScriptRunner.desktop"
+ICON_FILE="$HOME/.local/share/icons/hicolor/scalable/apps/script-runner.svg"
 
 # Track deletion results
 DELETED_SERVICE=false
@@ -204,13 +206,8 @@ case "$SCRIPT_DIR" in
     *) SCRIPT_DIR_EXTERNAL=true ;;
 esac
 
-# Partial state detected
-_ITEM_COUNT=0
-[[ "$HAS_SERVICE" == true ]] && (( _ITEM_COUNT++ )) || true
-[[ "$HAS_DROPIN" == true ]]  && (( _ITEM_COUNT++ )) || true
-[[ "$HAS_PROJECT" == true ]]   && (( _ITEM_COUNT++ )) || true
-
-if [[ $_ITEM_COUNT -lt 3 ]]; then
+# Partial state detected（drop-inは任意なので判定数に含めない）
+if [[ "$HAS_SERVICE" != "$HAS_PROJECT" ]]; then
     echo ""
     warn "Incomplete installation state detected. The following resources will be removed:"
     if [[ "$HAS_SERVICE" == true ]]; then
@@ -248,7 +245,7 @@ info "===== Phase 2: Backup check ====="
 
 if [[ -f "${INSTALL_DIR}/config.json" ]]; then
     echo ""
-    info "Found config.json (contains your secret token):"
+    info "Found config.json:"
     if confirm "Backup this file to ${BACKUP_DIR}/config.json?"; then
         mkdir -p "$BACKUP_DIR"
         cp -f "${INSTALL_DIR}/config.json" "${BACKUP_DIR}/config.json"
@@ -363,7 +360,8 @@ if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     if systemctl --user stop "$SERVICE_NAME" 2>/dev/null; then
         info "Stopped ${SERVICE_NAME}"
     else
-        warn "Failed to stop ${SERVICE_NAME}. Continuing with removal."
+        error "Failed to stop ${SERVICE_NAME}. Files were not removed."
+        exit 1
     fi
 else
     info "${SERVICE_NAME} is not active. Skipping stop."
@@ -373,7 +371,8 @@ if systemctl --user is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
     if systemctl --user disable "$SERVICE_NAME" 2>/dev/null; then
         info "Disabled ${SERVICE_NAME}"
     else
-        warn "Failed to disable ${SERVICE_NAME}. Continuing with removal."
+        error "Failed to disable ${SERVICE_NAME}. Files were not removed."
+        exit 1
     fi
 else
     info "${SERVICE_NAME} is not enabled. Skipping disable."
@@ -410,6 +409,24 @@ if [[ -d "$_DROPIN_DIR" ]]; then
     fi
 else
     info "${_DROPIN_DIR}/ not found. Skipping."
+fi
+
+# --- desktop entry and icon ---
+if [[ -f "$DESKTOP_FILE" ]]; then
+    rm -f "$DESKTOP_FILE" && info "Removed ${DESKTOP_FILE}" || HAS_DELETE_FAILURE=true
+fi
+if [[ -f "$ICON_FILE" ]]; then
+    rm -f "$ICON_FILE" && info "Removed ${ICON_FILE}" || HAS_DELETE_FAILURE=true
+fi
+command -v update-desktop-database &>/dev/null && update-desktop-database "$(dirname "$DESKTOP_FILE")" || true
+command -v gtk-update-icon-cache &>/dev/null && gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+
+# --- runtime connection information ---
+_RUNTIME_BASE="${XDG_RUNTIME_DIR:-/run/user/${UID}}"
+_RUNTIME_DIR="${_RUNTIME_BASE}/script-runner"
+if [[ -d "$_RUNTIME_DIR" && ! -L "$_RUNTIME_DIR" && -O "$_RUNTIME_DIR" ]]; then
+    rm -f "${_RUNTIME_DIR}/connection.json"
+    rmdir "$_RUNTIME_DIR" 2>/dev/null || true
 fi
 
 # --- Install directory (including venv) ---

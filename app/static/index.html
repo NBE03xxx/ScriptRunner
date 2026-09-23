@@ -9,13 +9,9 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
 
-    <!-- 丸みのあるフォント（Nunito） -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-
-    <link rel="stylesheet" href="/static/style.css?v=13">
-    <script src="/static/app.js?v=12" defer></script>
+    <script src="/static/theme-init.js?v=1"></script>
+    <link rel="stylesheet" href="/static/style.css?v=16">
+    <script src="/static/app.js?v=15" defer></script>
 </head>
 <body>
 
@@ -27,6 +23,7 @@
             <div class="primary-controls">
                 <button class="btn-create" id="create-btn">＋ 新規作成</button>
                 <button class="btn-theme" id="theme-btn">🌓 テーマ切替</button>
+                <button class="btn-help" id="help-btn" type="button">？ ヘルプ</button>
             </div>
             <div class="list-controls">
                 <label for="tag-filter">Tag:</label>
@@ -48,6 +45,27 @@
 
     <div class="container">
         <ul id="script-list" class="script-list"></ul>
+    </div>
+
+    <!-- ヘルプ／アプリ情報 -->
+    <div id="help-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-content modal-help">
+            <h2 id="help-title">Script Runner ヘルプ</h2>
+            <p>指定フォルダーにあるシェルスクリプトを一覧・編集・実行するデスクトップアプリです。</p>
+            <h3>使い方</h3>
+            <ul>
+                <li>「＋ 新規作成」で <code>.sh</code> ファイルを作成します。</li>
+                <li>各項目の「Edit」で内容を編集し、「Run」でターミナルから実行します。</li>
+                <li>Tagで絞り込み、並べ替えで表示順を変更できます。</li>
+                <li>「Delete」は確認後にスクリプトを削除します。削除は取り消せません。</li>
+            </ul>
+            <h3>このアプリについて</h3>
+            <p>Script RunnerはGTK4とWebKitGTKを使用します。サービスはローカルで動作し、画面を閉じてもログイン中は稼働します。</p>
+            <p>テーマは起動時にデスクトップの設定に合わせます。「テーマ切替」で、この画面のライト／ダークを手動で変更できます。</p>
+            <div class="modal-actions">
+                <button class="btn-close" id="help-close-btn" type="button">閉じる</button>
+            </div>
+        </div>
     </div>
 
     <!-- 削除確認モーダル -->
@@ -76,22 +94,6 @@
             <div class="modal-actions">
                 <button class="btn-save" id="save-btn">保存</button>
                 <button class="btn-close" id="close-editor-btn">閉じる</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- トークン入力モーダル -->
-    <div id="token-modal" class="modal">
-        <div class="modal-content modal-sm">
-            <h2>🔑 認証トークンの入力</h2>
-            <p style="font-size:0.85rem;color:var(--ink-light);margin-bottom:16px;">インストール時に設定した認証トークンを入力してください。</p>
-            <input type="password" id="token-input" placeholder="トークンを入力..."
-                   style="width:100%;padding:10px 14px;font-size:0.95rem;border:1.5px solid var(--khaki-light);
-                          border-radius:var(--radius-sm);background:#fffdf8;color:var(--ink);
-                          font-family:inherit;box-sizing:border-box;margin-bottom:16px;">
-            <div id="token-error" style="color:var(--offline);font-size:0.82rem;font-weight:700;display:none;margin-bottom:10px;"></div>
-            <div class="modal-actions">
-                <button class="btn-save" id="token-submit-btn">接続</button>
             </div>
         </div>
     </div>

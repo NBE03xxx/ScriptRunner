@@ -8,58 +8,14 @@ let currentEditingScript = "";
 let isCreatingScript = false;
 let hostStatus = {};  // ホスト → "online"|"offline"
 let pendingDeleteName = "";
-let apiToken = "";    // localStorage から取得したトークン
 
-// ---- 認証ヘルパー ----
-function getToken() {
-    return localStorage.getItem('api-token') || '';
-}
-
-function setToken(token) {
-    apiToken = token;
-    if (token) {
-        localStorage.setItem('api-token', token);
-    } else {
-        localStorage.removeItem('api-token');
-    }
-}
-
-// API 共通ヘッダー（トークンが設定されている場合に付与）
-function getAuthHeaders(extra = {}) {
-    const headers = {...extra};
-    if (apiToken) {
-        headers['X-Secret-Token'] = apiToken;
-    }
-    return headers;
-}
-
-// 認証付き fetch。401 ならトークン入力モーダルを表示して Reject。
 async function authFetch(url, options = {}) {
-    const merged = {
-        ...options,
-        headers: getAuthHeaders(options.headers || {})
-    };
-    const res = await fetch(url, merged);
-    if (res.status === 401) {
-        showTokenModal();
-        throw new Error('認証が必要です');
+    const response = await fetch(url, options);
+    if (response.status === 401 || response.status === 503) {
+        window.webkit?.messageHandlers?.reconnect?.postMessage('');
+        throw new Error('サービスへ再接続しています');
     }
-    return res;
-}
-
-// ---- テーマ切替 ----
-function toggleTheme() {
-    const el = document.documentElement;
-    const newTheme = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    el.setAttribute('data-theme', newTheme);
-    localStorage.setItem('pref-theme', newTheme);
-}
-
-function initTheme() {
-    const saved = localStorage.getItem('pref-theme');
-    if (saved) {
-        document.documentElement.setAttribute('data-theme', saved);
-    }
+    return response;
 }
 
 // ---- ユーティリティ ----
@@ -116,51 +72,6 @@ function compareNatural(a, b) {
         if (av > bv) return 1;
     }
     return 0;
-}
-
-// ---- トークンモーダル ----
-function showTokenModal() {
-    document.getElementById('token-modal').style.display = 'block';
-    const input = document.getElementById('token-input');
-    input.value = '';
-    document.getElementById('token-error').style.display = 'none';
-    input.focus();
-}
-
-function hideTokenModal() {
-    document.getElementById('token-modal').style.display = 'none';
-}
-
-async function submitToken() {
-    const token = document.getElementById('token-input').value.trim();
-    if (!token) return;
-
-    // トークン検証：scripts API にテストリクエストを送る
-    try {
-        const res = await fetch(`${API_BASE}/scripts`, {
-            headers: {'X-Secret-Token': token}
-        });
-        if (res.ok) {
-            setToken(token);
-            hideTokenModal();
-            showStatus('認証に成功しました', 'success');
-            fetchScripts();
-            fetchPings();
-        } else if (res.status === 401) {
-            const errData = await res.json().catch(() => ({detail: '認証に失敗しました'}));
-            const errEl = document.getElementById('token-error');
-            errEl.textContent = errData.detail || 'トークンが正しくありません。もう一度確認してください。';
-            errEl.style.display = 'block';
-        } else {
-            const errEl = document.getElementById('token-error');
-            errEl.textContent = 'トークンが正しくありません。もう一度確認してください。';
-            errEl.style.display = 'block';
-        }
-    } catch (e) {
-        const errEl = document.getElementById('token-error');
-        errEl.textContent = '接続に失敗しました。サーバーを確認してください。';
-        errEl.style.display = 'block';
-    }
 }
 
 // ---- スクリプト一覧 ----
@@ -424,15 +335,13 @@ function closeEditor() {
 
 // ---- スクリプト実行 ----
 async function runScript(name) {
-    try {
-        const res = await authFetch(`${API_BASE}/execute/${encodeURIComponent(name)}`, {method: 'POST'});
-        if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.detail || 'Run failed');
-        }
-        const data = await res.json();
-        showStatus(`ターミナルで実行: ${name}`, 'success');
-    } catch (e) { showStatus(e.message, 'error'); }
+    const nativeRunner = window.webkit?.messageHandlers?.runScript;
+    if (nativeRunner) {
+        nativeRunner.postMessage(name);
+        showStatus(`ターミナルを起動しています: ${name}`, 'success');
+        return;
+    }
+    showStatus('スクリプトの実行にはデスクトップアプリが必要です', 'error');
 }
 
 // ---- 削除確認フロー ----
@@ -459,12 +368,28 @@ async function confirmDelete() {
 }
 
 // ---- イベントバインディング（DOMContentLoaded 後） ----
+function openHelp() {
+    document.getElementById('help-modal').style.display = 'block';
+    document.getElementById('help-close-btn').focus();
+}
+
+function closeHelp() {
+    document.getElementById('help-modal').style.display = 'none';
+    document.getElementById('help-btn').focus();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-
-    apiToken = getToken();
-
-    document.getElementById('theme-btn').addEventListener('click', toggleTheme);
+    document.getElementById('theme-btn').addEventListener('click', window.ScriptRunnerTheme.toggle);
+    document.getElementById('help-btn').addEventListener('click', openHelp);
+    document.getElementById('help-close-btn').addEventListener('click', closeHelp);
+    document.getElementById('help-modal').addEventListener('click', (event) => {
+        if (event.target.id === 'help-modal') closeHelp();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && document.getElementById('help-modal').style.display === 'block') {
+            closeHelp();
+        }
+    });
     document.getElementById('create-btn').addEventListener('click', openCreate);
     document.getElementById('sort-select').addEventListener('change', handleSortChange);
     document.getElementById('tag-filter').addEventListener('change', handleSortChange);
@@ -472,12 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('close-editor-btn').addEventListener('click', closeEditor);
     document.getElementById('delete-confirm-btn').addEventListener('click', confirmDelete);
     document.getElementById('delete-cancel-btn').addEventListener('click', closeDeleteConfirm);
-
-    // トークンモーダル
-    document.getElementById('token-submit-btn').addEventListener('click', submitToken);
-    document.getElementById('token-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submitToken();
-    });
 
     // モーダル外クリックで閉じる
     document.getElementById('editor-modal').addEventListener('click', (e) => {
@@ -487,42 +406,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.id === 'delete-modal') closeDeleteConfirm();
     });
 
-    // 認証状態を確認して初期化
     (async () => {
         try {
-            const res = await fetch(`${API_BASE}/token-required`);
-            const data = await res.json();
-
-            if (!data.required) {
-                // トークン不要 → 通常起動
-                await fetchScripts();
-                fetchPings();
-                setInterval(fetchPings, 30_000);
-                showStatus('Script Runner に接続しました', 'success');
-                return;
-            }
-
-            if (apiToken) {
-                // 保存済みトークンがある → 検証して利用
-                const testRes = await fetch(`${API_BASE}/scripts`, {
-                    headers: {'X-Secret-Token': apiToken}
-                });
-                if (testRes.ok) {
-                    await fetchScripts();
-                    fetchPings();
-                    setInterval(fetchPings, 30_000);
-                    showStatus('Script Runner に接続しました', 'success');
-                    return;
-                } else {
-                    // トークンが無効 → 再入力
-                    setToken('');
-                }
-            }
-
-            // トークンなしまたは無効 → モーダル表示
-            showTokenModal();
-        } catch {
-            // サーバー接続失敗は放置
+            await fetchScripts();
+            fetchPings();
+            setInterval(fetchPings, 30_000);
+            showStatus('Script Runner に接続しました', 'success');
+        } catch (error) {
+            showStatus(error.message || 'サービスへ接続できません', 'error');
         }
     })();
 });

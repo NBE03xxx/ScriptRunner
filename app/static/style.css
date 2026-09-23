@@ -4,6 +4,7 @@
    ============================================ */
 
 :root {
+    color-scheme: light;
     /* ペーパー背景用カラーパレット（アース tones） */
     --paper: #f5f0e1;            /* 薄めのベージュ（メイン背景） */
     --menu-bg: #faf6eb;           /* メニューカードの紙色 */
@@ -28,6 +29,7 @@
 
 /* ---------- ダークモード ---------- */
 html[data-theme="dark"] {
+    color-scheme: dark;
     --paper: #1a1a2e;
     --menu-bg: #16213e;
     --editor-bg: #10182c;
@@ -65,7 +67,7 @@ html[data-theme="dark"] .script-item {
 
 /* ---------- ベース ---------- */
 body {
-    font-family: 'Nunito', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
+    font-family: 'Ubuntu', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
     background-color: var(--paper);
     /* ノイズ感のある紙テクスチャ（CSS 単体で生成） */
     background-image:
@@ -259,6 +261,12 @@ button:disabled {
     background: linear-gradient(135deg, var(--accent), #7a6448);
     color: #fff;
     box-shadow: 0 2px 6px rgba(120, 90, 50, 0.25);
+}
+
+.btn-help {
+    background: var(--menu-bg);
+    color: var(--ink);
+    border: 1.5px solid var(--khaki-light);
 }
 
 /* Run ボタン（レタスグリーン） */
@@ -455,6 +463,23 @@ button:disabled {
     font-size: 1.2rem;
     margin-bottom: 16px;
     font-weight: 800;
+}
+
+.modal-help {
+    max-width: 640px;
+    max-height: 80vh;
+    overflow-y: auto;
+    line-height: 1.6;
+}
+
+.modal-help h3 {
+    font-size: 1rem;
+    margin: 18px 0 6px;
+}
+
+.modal-help ul {
+    margin: 6px 0 0;
+    padding-left: 1.5em;
 }
 
 #editor-content {

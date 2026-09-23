@@ -29,18 +29,37 @@ if [[ "$(id -u)" -eq 0 ]]; then
     exit 1
 fi
 
-INSTALL_DIR="${HOME}/ScriptRunner"
+INSTALLER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+INSTALL_DIR="${SCRIPT_RUNNER_INSTALL_DIR:-${HOME}/ScriptRunner}"
+SOURCE_DIR="${SCRIPT_RUNNER_SOURCE_DIR:-$INSTALLER_DIR}"
 SERVICE_NAME="script-runner"
 SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
-REPO_URL="http://192.168.1.152:3000/yoshimi/ScriptRunner.git"
+DESKTOP_FILE="$HOME/.local/share/applications/com.nbe03xxx.ScriptRunner.desktop"
+ICON_FILE="$HOME/.local/share/icons/hicolor/scalable/apps/script-runner.svg"
 
 # Track what we've installed for rollback
-CLONED=false
 VENV_CREATED=false
 CONFIG_CREATED=false
-BACKUP_CONFIG=""
 SERVICE_COPIED=false
-ENV_CREATED=false
+DESKTOP_CREATED=false
+ICON_CREATED=false
+INSTALL_DIR_CREATED=false
+ROLLBACK_DIR=""
+ROLLBACK_READY=false
+ROLLBACK_DONE=false
+INSTALL_SUCCEEDED=false
+HAD_CONFIG=false
+HAD_VENV=false
+HAD_SERVICE=false
+HAD_DESKTOP=false
+HAD_ICON=false
+WAS_SERVICE_ACTIVE=false
+WAS_SERVICE_ENABLED=false
+
+MANAGED_PATHS=(
+    app requirements.txt README.md DOCUMENTS.md install.sh uninstall.sh
+    DESKTOP_APP_PLAN.md tests config.example.json LICENSE
+)
 
 # Colors
 RED='\033[0;31m'
@@ -155,38 +174,105 @@ error()   { echo -e "${RED}[ERROR]${NC} $(translate "$*")"; }
 # ============================================================
 
 rollback() {
+    [[ "$ROLLBACK_READY" == true && "$ROLLBACK_DONE" == false ]] || return 0
+    ROLLBACK_DONE=true
     echo ""
     warn "Rolling back changes..."
 
-    if [[ "$SERVICE_COPIED" == true ]]; then
-        rm -f "$SERVICE_FILE" && info "Removed service file" || true
-    fi
+    systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
 
-    systemctl daemon-reload 2>/dev/null || true
+    if [[ "$INSTALL_DIR_CREATED" == true ]]; then
+        rm -rf "$INSTALL_DIR" && info "Removed cloned directory" || true
+    else
+        for managed_path in "${MANAGED_PATHS[@]}"; do
+            rm -rf -- "${INSTALL_DIR:?}/${managed_path}" || true
+            if [[ -e "${ROLLBACK_DIR}/install/${managed_path}" || -L "${ROLLBACK_DIR}/install/${managed_path}" ]]; then
+                mkdir -p -- "$(dirname -- "${INSTALL_DIR}/${managed_path}")"
+                cp -a -- "${ROLLBACK_DIR}/install/${managed_path}" "${INSTALL_DIR}/${managed_path}" || true
+            fi
+        done
 
-    if [[ "$ENV_CREATED" == true ]]; then
-        rm -f "${INSTALL_DIR}/.env" && info "Removed .env" || true
-    fi
+        rm -rf -- "${INSTALL_DIR:?}/venv" || true
+        if [[ "$HAD_VENV" == true && -d "${ROLLBACK_DIR}/venv" ]]; then
+            mv -- "${ROLLBACK_DIR}/venv" "${INSTALL_DIR}/venv" || true
+        fi
 
-    if [[ "$VENV_CREATED" == true ]]; then
-        rm -rf "${INSTALL_DIR}/venv" && info "Removed venv directory" || true
-    fi
-
-    if [[ "$CONFIG_CREATED" == true ]]; then
-        if [[ -n "$BACKUP_CONFIG" && -f "$BACKUP_CONFIG" ]]; then
-            mv -- "$BACKUP_CONFIG" "${INSTALL_DIR}/config.json" && info "Restored config.json from backup" || true
+        if [[ "$HAD_CONFIG" == true ]]; then
+            cp -a -- "${ROLLBACK_DIR}/config.json" "${INSTALL_DIR}/config.json" || true
         else
-            rm -f "${INSTALL_DIR}/config.json" && info "Removed created config.json" || true
+            rm -f -- "${INSTALL_DIR}/config.json" || true
         fi
     fi
 
-    if [[ -n "$BACKUP_CONFIG" && -f "$BACKUP_CONFIG" ]]; then
-        rm -f "$BACKUP_CONFIG" || true
+    rm -f -- "$SERVICE_FILE" "$DESKTOP_FILE" "$ICON_FILE" || true
+    [[ "$HAD_SERVICE" == true ]] && cp -a -- "${ROLLBACK_DIR}/service" "$SERVICE_FILE" || true
+    [[ "$HAD_DESKTOP" == true ]] && cp -a -- "${ROLLBACK_DIR}/desktop" "$DESKTOP_FILE" || true
+    [[ "$HAD_ICON" == true ]] && cp -a -- "${ROLLBACK_DIR}/icon" "$ICON_FILE" || true
+
+    systemctl --user daemon-reload 2>/dev/null || true
+    if [[ "$WAS_SERVICE_ENABLED" == true ]]; then
+        systemctl --user enable "$SERVICE_NAME" 2>/dev/null || true
+    else
+        systemctl --user disable "$SERVICE_NAME" 2>/dev/null || true
+    fi
+    [[ "$WAS_SERVICE_ACTIVE" == true ]] && systemctl --user start "$SERVICE_NAME" 2>/dev/null || true
+
+    rm -rf -- "$ROLLBACK_DIR" || true
+}
+
+finish_install() {
+    INSTALL_SUCCEEDED=true
+    ROLLBACK_READY=false
+    [[ -n "$ROLLBACK_DIR" ]] && rm -rf -- "$ROLLBACK_DIR"
+}
+
+on_exit() {
+    local status=$?
+    if [[ $status -ne 0 && "$INSTALL_SUCCEEDED" == false ]]; then
+        rollback
+    fi
+}
+
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+prepare_rollback() {
+    ROLLBACK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/script-runner-install.XXXXXX")"
+    mkdir -p "${ROLLBACK_DIR}/install"
+
+    if [[ -d "$INSTALL_DIR" ]]; then
+        for managed_path in "${MANAGED_PATHS[@]}"; do
+            if [[ -e "${INSTALL_DIR}/${managed_path}" || -L "${INSTALL_DIR}/${managed_path}" ]]; then
+                mkdir -p -- "$(dirname -- "${ROLLBACK_DIR}/install/${managed_path}")"
+                cp -a -- "${INSTALL_DIR}/${managed_path}" "${ROLLBACK_DIR}/install/${managed_path}"
+            fi
+        done
+        if [[ -f "${INSTALL_DIR}/config.json" ]]; then
+            HAD_CONFIG=true
+            cp -a -- "${INSTALL_DIR}/config.json" "${ROLLBACK_DIR}/config.json"
+        fi
+        if [[ -d "${INSTALL_DIR}/venv" ]]; then
+            HAD_VENV=true
+        fi
     fi
 
-    if [[ "$CLONED" == true ]]; then
-        rm -rf "$INSTALL_DIR" && info "Removed cloned directory" || true
+    if [[ -f "$SERVICE_FILE" ]]; then
+        HAD_SERVICE=true
+        cp -a -- "$SERVICE_FILE" "${ROLLBACK_DIR}/service"
     fi
+    if [[ -f "$DESKTOP_FILE" ]]; then
+        HAD_DESKTOP=true
+        cp -a -- "$DESKTOP_FILE" "${ROLLBACK_DIR}/desktop"
+    fi
+    if [[ -f "$ICON_FILE" ]]; then
+        HAD_ICON=true
+        cp -a -- "$ICON_FILE" "${ROLLBACK_DIR}/icon"
+    fi
+    systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null && WAS_SERVICE_ACTIVE=true
+    systemctl --user is-enabled --quiet "$SERVICE_NAME" 2>/dev/null && WAS_SERVICE_ENABLED=true
+    ROLLBACK_READY=true
 }
 
 # ============================================================
@@ -236,6 +322,61 @@ try:
 except (OSError, ValueError, TypeError, json.JSONDecodeError):
     sys.exit(1)
 PY
+}
+
+verify_service_connection() {
+    local connection_file="$1"
+    python3 - "$connection_file" <<'PY'
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+import http.cookiejar
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as connection_stream:
+        connection = json.load(connection_stream)
+    if connection.get("host") != "127.0.0.1":
+        raise ValueError("unexpected host")
+    port = connection.get("port")
+    token = connection.get("token")
+    pid = connection.get("pid")
+    instance_id = connection.get("instance_id")
+    if not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("invalid port")
+    if not isinstance(token, str) or len(token) < 32:
+        raise ValueError("invalid token")
+    if not isinstance(pid, int) or pid <= 0:
+        raise ValueError("invalid pid")
+    if not isinstance(instance_id, str) or not instance_id:
+        raise ValueError("invalid instance id")
+    os.kill(pid, 0)
+    url = f"http://127.0.0.1:{port}/desktop/bootstrap/{token}"
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+    )
+    with opener.open(url, timeout=1) as response:
+        if response.status != 200:
+            raise ValueError(f"unexpected HTTP status: {response.status}")
+    with opener.open(f"http://127.0.0.1:{port}/api/health", timeout=1) as response:
+        if json.load(response).get("instance_id") != instance_id:
+            raise ValueError("service instance id mismatch")
+except (OSError, ValueError, TypeError, json.JSONDecodeError, urllib.error.URLError):
+    sys.exit(1)
+PY
+}
+
+wait_for_service_connection() {
+    local connection_file="$1"
+    local attempt
+    for attempt in {1..50}; do
+        if [[ -r "$connection_file" ]] && verify_service_connection "$connection_file"; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    return 1
 }
 
 wait_for_folder_dialog() {
@@ -310,11 +451,10 @@ if ! command -v python3 &>/dev/null; then
 fi
 info "Python3: $(python3 --version)"
 
-if ! command -v git &>/dev/null; then
-    error "git is not installed."
+if [[ ! -f "${SOURCE_DIR}/app/main.py" || ! -f "${SOURCE_DIR}/requirements.txt" ]]; then
+    error "Application source files were not found: ${SOURCE_DIR}"
     exit 1
 fi
-info "git: $(git --version)"
 
 if ! command -v systemctl &>/dev/null; then
     error "systemd is not available."
@@ -322,64 +462,50 @@ if ! command -v systemctl &>/dev/null; then
 fi
 info "systemd: available"
 
+if [[ ! -r /etc/os-release ]] || ! grep -q '^ID=ubuntu$' /etc/os-release || ! grep -q '^VERSION_ID="26.04"$' /etc/os-release; then
+    error "This application supports Ubuntu 26.04 only."
+    exit 1
+fi
+info "Ubuntu 26.04: available"
+
+if ! python3 - <<'PY'
+import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("WebKit", "6.0")
+from gi.repository import Gtk, WebKit
+PY
+then
+    error "GTK4 / WebKitGTK 6.0 Python bindings are not available."
+    warn "Install them first:"
+    warn "  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-webkit-6.0 libwebkitgtk-6.0-4"
+    exit 1
+fi
+info "GTK4 / WebKitGTK 6.0: available"
+
+if [[ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
+    error "Legacy system-level service detected."
+    warn "Remove the old system service before installing the user service:"
+    warn "  sudo systemctl disable --now ${SERVICE_NAME}"
+    warn "  sudo rm /etc/systemd/system/${SERVICE_NAME}.service"
+    warn "  sudo systemctl daemon-reload"
+    exit 1
+fi
+
+for target in "$INSTALL_DIR" "$SERVICE_FILE" "$DESKTOP_FILE" "$ICON_FILE"; do
+    if [[ -L "$target" ]]; then
+        error "Symbolic-link installation target is not supported: ${target}"
+        exit 1
+    fi
+done
+
 # ============================================================
 # Phase 2: Configuration
 # ============================================================
 
 echo ""
 info "===== Phase 2: Configuration ====="
-
-read -rp "  SECRET_TOKEN ($([[ "$UI_LANG" == ja ]] && echo '必須' || echo 'required')): " INPUT_SECRET_TOKEN
-INPUT_SECRET_TOKEN="${INPUT_SECRET_TOKEN#"${INPUT_SECRET_TOKEN%%[![:space:]]*}"}"
-INPUT_SECRET_TOKEN="${INPUT_SECRET_TOKEN%"${INPUT_SECRET_TOKEN##*[![:space:]]}"}"
-while [[ -z "$INPUT_SECRET_TOKEN" ]]; do
-    warn "SECRET_TOKEN cannot be empty."
-    read -rp "  SECRET_TOKEN ($([[ "$UI_LANG" == ja ]] && echo '必須' || echo 'required')): " INPUT_SECRET_TOKEN
-    INPUT_SECRET_TOKEN="${INPUT_SECRET_TOKEN#"${INPUT_SECRET_TOKEN%%[![:space:]]*}"}"
-    INPUT_SECRET_TOKEN="${INPUT_SECRET_TOKEN%"${INPUT_SECRET_TOKEN##*[![:space:]]}"}"
-done
-SECRET_TOKEN="$INPUT_SECRET_TOKEN"
-
-# --- Port conflict check (with loop) ---
-PORT_PROMPT_FIRST=true
-while true; do
-    read -rp "  LISTEN_PORT [8080]: " INPUT_LISTEN_PORT
-
-    if [[ "$PORT_PROMPT_FIRST" == false && -z "$INPUT_LISTEN_PORT" ]]; then
-        error "Installation cancelled."
-        exit 1
-    fi
-
-    PORT_PROMPT_FIRST=false
-    LISTEN_PORT="${INPUT_LISTEN_PORT:-8080}"
-
-    PORT_HEX=$(printf '%04X' "$LISTEN_PORT" 2>/dev/null) || {
-        warn "Invalid port number: $LISTEN_PORT"
-        continue
-    }
-
-    PORT_IN_USE=false
-
-    if command -v ss &>/dev/null; then
-        if ss -tlnp | grep -qE ":${LISTEN_PORT}(\s|$)"; then
-            PORT_IN_USE=true
-        fi
-    elif [[ -r /proc/net/tcp ]]; then
-        if awk '{print $2}' /proc/net/tcp | grep -qi ":${PORT_HEX} 0A$"; then
-            PORT_IN_USE=true
-        fi
-    fi
-
-    if [[ "$PORT_IN_USE" == true ]]; then
-        warn "Port ${LISTEN_PORT} is already in use. Please enter a different port."
-    else
-        break
-    fi
-done
-
-info "Configuration:"
-info "  SECRET_TOKEN = ${SECRET_TOKEN}"
-info "  LISTEN_PORT  = ${LISTEN_PORT}"
+info "The service will select a private loopback port automatically."
+info "Authentication credentials will be generated for each service start."
 
 # ============================================================
 # Phase 3: File installation
@@ -389,58 +515,13 @@ echo ""
 info "===== Phase 3: Installing files ====="
 
 # --- Check for existing installation ---
-if [[ -f "$SERVICE_FILE" ]]; then
+if [[ -f "$SERVICE_FILE" || -f "${INSTALL_DIR}/app/main.py" ]]; then
     warn "Existing service file found: ${SERVICE_FILE}"
     if ! confirm "Overwrite existing installation?"; then
         error "Installation cancelled."
         exit 1
     fi
-
-    if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        warn "Stopping existing ${SERVICE_NAME}..."
-        systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
-    fi
 fi
-
-# Also check for legacy system-level service
-if [[ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
-    warn "Legacy system-level service detected."
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    fi
-fi
-
-# --- Install directory ---
-if [[ ! -d "$INSTALL_DIR" ]]; then
-    mkdir -p "$INSTALL_DIR"
-    chmod 0755 "$INSTALL_DIR"
-    info "Created ${INSTALL_DIR}"
-else
-    if [[ -f "${INSTALL_DIR}/config.json" ]]; then
-        BACKUP_CONFIG="${INSTALL_DIR}/config.json.bak"
-        cp -f "${INSTALL_DIR}/config.json" "$BACKUP_CONFIG"
-        info "Backed up existing config.json to ${BACKUP_CONFIG}"
-    fi
-fi
-
-# --- Clone repository ---
-if [[ ! -f "${INSTALL_DIR}/app/main.py" ]]; then
-    info "Cloning repository from ${REPO_URL}..."
-    if ! git clone "$REPO_URL" "$INSTALL_DIR"; then
-        error "Failed to clone repository."
-        rollback
-        exit 1
-    fi
-    CLONED=true
-    info "Cloned -> ${INSTALL_DIR}"
-else
-    info "app/main.py already exists. Skipping clone."
-fi
-
-# --- Create the default directory before opening the folder dialog ---
-mkdir -p "${INSTALL_DIR}/bin"
-chmod 0755 "${INSTALL_DIR}/bin"
-info "Prepared default script directory -> ${INSTALL_DIR}/bin/"
 
 DEFAULT_SCRIPT_DIR="${INSTALL_DIR}/bin"
 if _EXISTING_SCRIPT_DIR=$(read_configured_script_dir); then
@@ -451,13 +532,54 @@ echo ""
 select_script_directory "$DEFAULT_SCRIPT_DIR"
 info "  SCRIPT_DIRECTORY = ${SCRIPT_DIR}"
 
-# --- Generate config.json (no secret_token — managed via .env) ---
+prepare_rollback
+
+if [[ "$WAS_SERVICE_ACTIVE" == true ]]; then
+    warn "Stopping existing ${SERVICE_NAME}..."
+    systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
+fi
+
+# --- Install directory ---
+if [[ ! -d "$INSTALL_DIR" ]]; then
+    mkdir -p "$INSTALL_DIR"
+    chmod 0755 "$INSTALL_DIR"
+    INSTALL_DIR_CREATED=true
+    info "Created ${INSTALL_DIR}"
+fi
+
+# --- Install or update application files ---
+if [[ "$(cd -- "$SOURCE_DIR" && pwd -P)" != "$(cd -- "$INSTALL_DIR" && pwd -P)" ]]; then
+    for managed_path in "${MANAGED_PATHS[@]}"; do
+        [[ -e "${SOURCE_DIR}/${managed_path}" || -L "${SOURCE_DIR}/${managed_path}" ]] || continue
+        rm -rf -- "${INSTALL_DIR:?}/${managed_path}"
+        cp -a -- "${SOURCE_DIR}/${managed_path}" "${INSTALL_DIR}/${managed_path}"
+    done
+    info "Installed application files from ${SOURCE_DIR}"
+else
+    info "Application files are already in ${INSTALL_DIR}"
+fi
+
+# --- Create the default directory before opening the folder dialog ---
+mkdir -p "${INSTALL_DIR}/bin"
+chmod 0755 "${INSTALL_DIR}/bin"
+info "Prepared default script directory -> ${INSTALL_DIR}/bin/"
+
+# --- Generate config.json ---
 python3 - "$SCRIPT_DIR" "${INSTALL_DIR}/config.json" <<'PY'
 import json
 import sys
 
+try:
+    with open(sys.argv[2], encoding="utf-8") as config_file:
+        config = json.load(config_file)
+    if not isinstance(config, dict):
+        raise ValueError("config.json must contain an object")
+except FileNotFoundError:
+    config = {}
+
+config["script_dir"] = sys.argv[1]
 with open(sys.argv[2], "w", encoding="utf-8") as config_file:
-    json.dump({"script_dir": sys.argv[1]}, config_file, ensure_ascii=False, indent=4)
+    json.dump(config, config_file, ensure_ascii=False, indent=4)
     config_file.write("\n")
 PY
 CONFIG_CREATED=true
@@ -484,18 +606,19 @@ fi
 
 # --- Create virtual environment ---
 info "Creating Python virtual environment..."
-if ! python3 -m venv "${INSTALL_DIR}/venv"; then
-    error "Failed to create virtual environment."
-    rollback
-    exit 1
+if [[ "$HAD_VENV" == true && -d "${INSTALL_DIR}/venv" ]]; then
+    mv -- "${INSTALL_DIR}/venv" "${ROLLBACK_DIR}/venv"
 fi
-
-if ! "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/requirements.txt"; then
-    error "Failed to install Python dependencies."
-    rollback
+if ! python3 -m venv --system-site-packages "${INSTALL_DIR}/venv"; then
+    error "Failed to create virtual environment."
     exit 1
 fi
 VENV_CREATED=true
+
+if ! "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/requirements.txt"; then
+    error "Failed to install Python dependencies."
+    exit 1
+fi
 info "Installed dependencies -> ${INSTALL_DIR}/venv/"
 
 # --- Create user systemd service file ---
@@ -503,14 +626,13 @@ mkdir -p "$(dirname "$SERVICE_FILE")"
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Script Runner GUI
-After=network.target
+Description=Script Runner backend service
+After=default.target
 
 [Service]
 Type=simple
 WorkingDirectory=${INSTALL_DIR}
-EnvironmentFile=${INSTALL_DIR}/.env
-ExecStart=${INSTALL_DIR}/venv/bin/python app/main.py
+ExecStart=${INSTALL_DIR}/venv/bin/python -m app.service
 Restart=on-failure
 RestartSec=5
 
@@ -526,81 +648,29 @@ EOF
 SERVICE_COPIED=true
 info "Installed service file -> ${SERVICE_FILE}"
 
-# --- .env file (with GUI session info for terminal launch, Wayland preferred) ---
-_DETECTED_WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}"
-_DETECTED_DISPLAY="${DISPLAY:-}"
-_DETECTED_XAUTH="${XAUTHORITY:-}"
+# --- Desktop entry and icon ---
+mkdir -p "$(dirname "$DESKTOP_FILE")" "$(dirname "$ICON_FILE")"
+cp -f "${INSTALL_DIR}/app/static/favicon.svg" "$ICON_FILE"
+ICON_CREATED=true
 
-# Wayland セッションの検出（優先）
-# 1. 環境変数 WAYLAND_DISPLAY
-# 2. /run/user/$UID/wayland-* の存在
-if [[ -z "$_DETECTED_WAYLAND_DISPLAY" && -d "/run/user/${UID}" ]]; then
-    for _entry in "/run/user/${UID}"/wayland-*; do
-        if [[ -d "$_entry" ]]; then
-            _DETECTED_WAYLAND_DISPLAY="$(basename "$_entry")"
-            break
-        fi
-    done
-fi
-
-# X11 セッションの検出（フォールバック）
-if [[ -z "$_DETECTED_WAYLAND_DISPLAY" && -z "$_DETECTED_DISPLAY" ]]; then
-    _DETECTED_DISPLAY=":0"
-    warn "DISPLAY not set in current environment. Defaulting to :0"
-fi
-
-# XAUTHORITY の検出（X11 / Xwayland 用）
-if [[ -z "$_DETECTED_XAUTH" ]]; then
-    # 1. Mutter/Xwayland: /run/user/$UID/.mutter-Xwaylandauth.*
-    if [[ -d "/run/user/${UID}" ]]; then
-        _MUTTER_AUTH=$(find "/run/user/${UID}" -maxdepth 1 -name '.mutter-Xwaylandauth.*' -print -quit 2>/dev/null)
-        if [[ -n "$_MUTTER_AUTH" && -f "$_MUTTER_AUTH" ]]; then
-            _DETECTED_XAUTH="$_MUTTER_AUTH"
-        fi
-    fi
-
-    # 2. X11: ~/.Xauthority
-    if [[ -z "$_DETECTED_XAUTH" && -f "${HOME}/.Xauthority" ]]; then
-        _DETECTED_XAUTH="${HOME}/.Xauthority"
-    fi
-fi
-
-{
-    echo "SCRIPT_RUNNER_TOKEN=${SECRET_TOKEN}"
-    echo "UVICORN_PORT=${LISTEN_PORT}"
-    if [[ -n "$_DETECTED_WAYLAND_DISPLAY" ]]; then
-        echo "WAYLAND_DISPLAY=${_DETECTED_WAYLAND_DISPLAY}"
-        echo "XDG_SESSION_TYPE=wayland"
-    fi
-    if [[ -n "$_DETECTED_DISPLAY" ]]; then
-        echo "DISPLAY=${_DETECTED_DISPLAY}"
-        if [[ -z "$_DETECTED_WAYLAND_DISPLAY" ]]; then
-            echo "XDG_SESSION_TYPE=x11"
-        fi
-    fi
-    if [[ -n "$_DETECTED_XAUTH" ]]; then
-        echo "XAUTHORITY=${_DETECTED_XAUTH}"
-    fi
-} > "${INSTALL_DIR}/.env"
-
-ENV_CREATED=true
-info "Created .env -> ${INSTALL_DIR}/.env"
-
-if [[ -n "$_DETECTED_WAYLAND_DISPLAY" ]]; then
-    info "Terminal launch: Wayland session (WAYLAND_DISPLAY=${_DETECTED_WAYLAND_DISPLAY})"
-    if [[ -n "$_DETECTED_XAUTH" ]]; then
-        info "  XAUTHORITY=${_DETECTED_XAUTH} (for Xwayland apps)"
-    fi
-elif [[ -n "$_DETECTED_DISPLAY" ]]; then
-    info "Terminal launch: X11 session (DISPLAY=${_DETECTED_DISPLAY})"
-    if [[ -n "$_DETECTED_XAUTH" ]]; then
-        info "  XAUTHORITY=${_DETECTED_XAUTH}"
-    else
-        warn "  XAUTHORITY not detected — may need manual config"
-    fi
-else
-    warn "No GUI session detected. Script execution via terminal will fail until .env is updated."
-fi
+cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Script Runner
+Comment=シェルスクリプトを管理・実行します
+Exec=${INSTALL_DIR}/venv/bin/python -m app.desktop
+Path=${INSTALL_DIR}
+Icon=script-runner
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true
+StartupWMClass=com.nbe03xxx.ScriptRunner
+EOF
+chmod 0644 "$DESKTOP_FILE" "$ICON_FILE"
+DESKTOP_CREATED=true
+command -v update-desktop-database &>/dev/null && update-desktop-database "$(dirname "$DESKTOP_FILE")" || true
+command -v gtk-update-icon-cache &>/dev/null && gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+info "Installed desktop entry -> ${DESKTOP_FILE}"
 
 # ============================================================
 # Phase 4: Service activation
@@ -609,33 +679,17 @@ fi
 echo ""
 info "===== Phase 4: Activating service ====="
 
-# --- Check for existing system-level installation and remove it ---
-_OLD_SERVICE="/etc/systemd/system/${SERVICE_NAME}.service"
-if [[ -f "$_OLD_SERVICE" ]]; then
-    warn "Existing system-level service found. Removing..."
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
-    rm -f "$_OLD_SERVICE"
-    systemctl daemon-reload 2>/dev/null || true
-    info "Removed system-level service"
-fi
-
 if ! systemctl --user daemon-reload; then
     error "Failed to reload user systemd daemon."
-    rollback
     exit 1
 fi
 info "Reloaded user systemd daemon"
 
 if ! systemctl --user enable "$SERVICE_NAME"; then
     error "Failed to enable ${SERVICE_NAME}."
-    rollback
     exit 1
 fi
 info "Enabled ${SERVICE_NAME} (auto-start on login)"
-
-# Enable lingering so the service runs even when not logged in graphically
-loginctl enable-linger "$(whoami)" 2>/dev/null || true
 
 # --- Start service and verify ---
 echo ""
@@ -650,20 +704,15 @@ if ! systemctl --user start "$SERVICE_NAME"; then
     exit 1
 fi
 
-sleep 2
-
 if systemctl --user is-active --quiet "$SERVICE_NAME"; then
-    # Verify the port is listening
-    PORT_OK=false
-    if command -v ss &>/dev/null; then
-        if ss -tlnp | grep -qE ":${LISTEN_PORT}(\s|$)"; then
-            PORT_OK=true
-        fi
-    elif [[ -r /proc/net/tcp ]]; then
-        PORT_HEX=$(printf '%04X' "$LISTEN_PORT")
-        if awk '{print $2}' /proc/net/tcp | grep -qi ":${PORT_HEX} 0A$"; then
-            PORT_OK=true
-        fi
+    RUNTIME_BASE="${XDG_RUNTIME_DIR:-/run/user/${UID}}"
+    CONNECTION_FILE="${RUNTIME_BASE}/script-runner/connection.json"
+
+    if ! wait_for_service_connection "$CONNECTION_FILE"; then
+        error "Service connection verification failed: ${CONNECTION_FILE}"
+        warn "Check logs with:"
+        warn "  journalctl --user -u ${SERVICE_NAME} -f"
+        exit 1
     fi
 
     echo ""
@@ -672,25 +721,22 @@ if systemctl --user is-active --quiet "$SERVICE_NAME"; then
     info "============================================"
     echo ""
     info "Service: ${SERVICE_NAME}"
-    info "Access : http://<your-host>:${LISTEN_PORT}"
+    info "Application: Script Runner (application menu)"
     info "Scripts: ${SCRIPT_DIR}"
     echo ""
-    if [[ "$PORT_OK" == true ]]; then
-        info "Port   : ${LISTEN_PORT} is listening"
-    else
-        warn "Port   : ${LISTEN_PORT} - could not verify (service may still be starting)"
-    fi
+    info "Connection: ${CONNECTION_FILE}"
     echo ""
     info "Status : systemctl --user status ${SERVICE_NAME}"
     info "Logs   : journalctl --user -u ${SERVICE_NAME} -f"
     info "Stop   : systemctl --user stop ${SERVICE_NAME}"
     info "Start  : systemctl --user start ${SERVICE_NAME}"
     info "============================================"
+    finish_install
 else
     error "Service failed to start."
     echo ""
     warn "Installation completed but service did not start."
     warn "Check logs with:"
-    warn "  journalctl -u ${SERVICE_NAME} -f"
+    warn "  journalctl --user -u ${SERVICE_NAME} -f"
     exit 1
 fi
